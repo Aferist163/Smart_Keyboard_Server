@@ -9,13 +9,21 @@ namespace KeyboardLightingServer
     {
         private static IAuraSdk sdk;
         private static IAuraSyncDevice keyboard;
+
         private static readonly Dictionary<string, uint> colorMap = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase)
         {
-            { "blue", 0x000000FF },
-            { "red", 0x00FF0000 },
-            { "green", 0x0000FF00 },
-            { "yellow", 0x00FFFF00 },
-            { "white", 0x00FFFFFF }
+            { "red", 0xFF0000FF },         
+            { "orange", 0xFF007CFF },      
+            { "yellow", 0xFF00FFFF },      
+            { "light green", 0xFF2CFFC2 }, 
+            { "blue", 0xFFFF0000 },        
+            { "light blue", 0xFFFFAA3D },  
+            { "blue_lighGreen", 0xFFff9e00 },
+            { "green", 0xFF00FF00 },       
+            { "purple", 0xFFFF007D },      
+            { "purple_pink", 0xFFC800FF },
+            { "pink", 0xFFFF00ED },
+            { "pink_red", 0xFFFF008A }
         };
 
         static void Main()
