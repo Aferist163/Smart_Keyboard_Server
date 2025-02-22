@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Net;
+using System.Collections.Generic;
 using AuraServiceLib;
 
 namespace KeyboardLightingServer
@@ -8,56 +9,37 @@ namespace KeyboardLightingServer
     {
         private static IAuraSdk sdk;
         private static IAuraSyncDevice keyboard;
+        private static readonly Dictionary<string, uint> colorMap = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase)
+        {
+            { "blue", 0x000000FF },
+            { "red", 0x00FF0000 },
+            { "green", 0x0000FF00 },
+            { "yellow", 0x00FFFF00 },
+            { "white", 0x00FFFFFF }
+        };
 
         static void Main()
         {
             try
             {
+                Console.OutputEncoding = System.Text.Encoding.UTF8;
                 Console.WriteLine("Инициализация Aura SDK...");
-                InitializeAuraSdk();
-
-                if (keyboard == null)
+                if (!InitializeAuraSdk())
                 {
-                    Console.WriteLine("Клавиатура не найдена. Завершение работы.");
+                    Console.WriteLine("Ошибка: Клавиатура не найдена. Завершение работы.");
                     return;
                 }
 
-                Console.WriteLine("Окрашиваем клавиатуру в белый цвет...");
-                SetKeyboardColor("white");
-
-                using (HttpListener listener = new HttpListener())
-                {
-                    listener.Prefixes.Add("http://192.168.0.166:5000/color/");
-                    listener.Start();
-                    Console.WriteLine("Сервер запущен на порту 5000...");
-
-                    while (true)
-                    {
-                        HttpListenerContext context = listener.GetContext();
-                        HttpListenerRequest request = context.Request;
-
-                        if (request.HttpMethod == "GET" && request.QueryString["value"] != null)
-                        {
-                            string color = request.QueryString["value"];
-                            SetKeyboardColor(color);
-
-                            HttpListenerResponse response = context.Response;
-                            string responseString = $"Клавиатура окрашена в {color}";
-                            byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
-                            response.ContentLength64 = buffer.Length;
-                            response.OutputStream.Write(buffer, 0, buffer.Length);
-                            response.OutputStream.Close();
-                        }
-                    }
-                }
+                Console.WriteLine("Сервер запущен на порту 5000...");
+                StartServer();
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Ошибка: {ex.Message}");
+                Console.WriteLine($"Фатальная ошибка: {ex.Message}");
             }
         }
 
-        static void InitializeAuraSdk()
+        static bool InitializeAuraSdk()
         {
             try
             {
@@ -74,15 +56,42 @@ namespace KeyboardLightingServer
                     if (dev.Type == 0x80000)
                     {
                         keyboard = dev;
-                        Console.WriteLine("Клавиатура найдена.");
-                        break;
+                        Console.WriteLine("✅ Клавиатура найдена.");
+                        return true;
                     }
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"Ошибка при инициализации Aura SDK: {ex.Message}");
-                sdk = null;
+            }
+            return false;
+        }
+
+        static void StartServer()
+        {
+            using (HttpListener listener = new HttpListener())
+            {
+                listener.Prefixes.Add("http://192.168.0.166:5000/color/");
+                listener.Start();
+
+                while (true)
+                {
+                    HttpListenerContext context = listener.GetContext();
+                    HttpListenerRequest request = context.Request;
+
+                    if (request.HttpMethod == "GET" && request.QueryString["value"] != null)
+                    {
+                        string color = request.QueryString["value"];
+                        SetKeyboardColor(color);
+
+                        string responseString = $"Клавиатура окрашена в {color}";
+                        byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
+                        context.Response.ContentLength64 = buffer.Length;
+                        context.Response.OutputStream.Write(buffer, 0, buffer.Length);
+                        context.Response.OutputStream.Close();
+                    }
+                }
             }
         }
 
@@ -90,49 +99,32 @@ namespace KeyboardLightingServer
         {
             if (keyboard == null)
             {
-                Console.WriteLine("Клавиатура не обнаружена. Цвет не изменен.");
+                Console.WriteLine("❌ Ошибка: Клавиатура не обнаружена.");
                 return;
             }
 
-            uint color = 0x00FFFFFF; // Белый цвет по умолчанию
-
-            switch (colorName.ToLower())
+            if (!colorMap.TryGetValue(colorName, out uint color))
             {
-                case "blue":
-                    color = 0x000000FF;
-                    break;
-                case "red":
-                    color = 0x00FF0000;
-                    break;
-                case "green":
-                    color = 0x0000FF00;
-                    break;
-                case "yellow":
-                    color = 0x00FFFF00;
-                    break;
-                case "white":
-                    color = 0x00FFFFFF;
-                    break;
-                default:
-                    Console.WriteLine("Неизвестный цвет, используется белый.");
-                    break;
+                Console.WriteLine($"⚠️ Неизвестный цвет '{colorName}', используется белый.");
+                color = 0x00FFFFFF;
             }
 
             try
             {
-                Console.WriteLine($"Изменение цвета клавиатуры на {colorName}...");
+                Console.WriteLine($"🎨 Установка цвета: {colorName}...");
 
                 foreach (IAuraRgbLight light in keyboard.Lights)
                 {
                     light.Color = color;
                 }
                 keyboard.Apply();
+                keyboard.Apply();
 
-                Console.WriteLine($"Клавиатура успешно окрашена в {colorName}");
+                Console.WriteLine($"✅ Клавиатура окрашена в {colorName}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Ошибка при установке цвета: {ex.Message}");
+                Console.WriteLine($"❌ Ошибка при установке цвета: {ex.Message}");
             }
         }
     }
