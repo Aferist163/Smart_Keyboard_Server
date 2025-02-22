@@ -24,6 +24,7 @@ namespace KeyboardLightingServer
             {
                 Console.OutputEncoding = System.Text.Encoding.UTF8;
                 Console.WriteLine("Инициализация Aura SDK...");
+
                 if (!InitializeAuraSdk())
                 {
                     Console.WriteLine("Ошибка: Клавиатура не найдена. Завершение работы.");
@@ -57,6 +58,7 @@ namespace KeyboardLightingServer
                     {
                         keyboard = dev;
                         Console.WriteLine("✅ Клавиатура найдена.");
+                        SetKeyboardColor("white");
                         return true;
                     }
                 }
