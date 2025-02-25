@@ -12,18 +12,19 @@ namespace KeyboardLightingServer
 
         private static readonly Dictionary<string, uint> colorMap = new Dictionary<string, uint>(StringComparer.OrdinalIgnoreCase)
         {
-            { "red", 0xFF0000FF },         
-            { "orange", 0xFF007CFF },      
-            { "yellow", 0xFF00FFFF },      
-            { "light green", 0xFF2CFFC2 }, 
-            { "blue", 0xFFFF0000 },        
-            { "light blue", 0xFFFFAA3D },  
+            { "red", 0xFF0000FF },
+            { "orange", 0xFF007CFF },
+            { "yellow", 0xFF00FFFF },
+            { "light green", 0xFF2CFFC2 },
+            { "blue", 0xFFFF0000 },
+            { "light blue", 0xFFFFAA3D },
             { "blue_lighGreen", 0xFFff9e00 },
-            { "green", 0xFF00FF00 },       
-            { "purple", 0xFFFF007D },      
+            { "green", 0xFF00FF00 },
+            { "purple", 0xFFFF007D },
             { "purple_pink", 0xFFC800FF },
             { "pink", 0xFFFF00ED },
-            { "pink_red", 0xFFFF008A }
+            { "pink_red", 0xFFFF008A },
+            { "black" , 0xFF000000 }
         };
 
         static void Main()
@@ -66,7 +67,8 @@ namespace KeyboardLightingServer
                     {
                         keyboard = dev;
                         Console.WriteLine("✅ Клавиатура найдена.");
-                        SetKeyboardColor("white");
+                        SetKeyboardColor("white", 100);
+
                         return true;
                     }
                 }
@@ -84,18 +86,27 @@ namespace KeyboardLightingServer
             {
                 listener.Prefixes.Add("http://192.168.0.166:5000/color/");
                 listener.Start();
+                Console.WriteLine("🚀 Сервер запущен...");
 
                 while (true)
                 {
                     HttpListenerContext context = listener.GetContext();
                     HttpListenerRequest request = context.Request;
 
-                    if (request.HttpMethod == "GET" && request.QueryString["value"] != null)
+                    if (request.HttpMethod == "GET" && request.QueryString["value"] != null && request.QueryString["sliderValue"] != null)
                     {
                         string color = request.QueryString["value"];
-                        SetKeyboardColor(color);
+                        string sliderValueStr = request.QueryString["sliderValue"];
 
-                        string responseString = $"Клавиатура окрашена в {color}";
+                        if (!double.TryParse(sliderValueStr, out double sliderValue))
+                        {
+                            sliderValue = 100; 
+                        }
+
+                        int brightness = Clamp((int)sliderValue, 0, 100);
+                        SetKeyboardColor(color, brightness);
+
+                        string responseString = $"Клавиатура окрашена в {color} с яркостью {brightness}%";
                         byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
                         context.Response.ContentLength64 = buffer.Length;
                         context.Response.OutputStream.Write(buffer, 0, buffer.Length);
@@ -105,7 +116,12 @@ namespace KeyboardLightingServer
             }
         }
 
-        static void SetKeyboardColor(string colorName)
+        static int Clamp(int value, int min, int max)
+        {
+            return (value < min) ? min : (value > max) ? max : value;
+        }
+
+        static void SetKeyboardColor(string colorName, int brightness)
         {
             if (keyboard == null)
             {
@@ -121,21 +137,33 @@ namespace KeyboardLightingServer
 
             try
             {
-                Console.WriteLine($"🎨 Установка цвета: {colorName}...");
+                Console.WriteLine($"🎨 Установка цвета: {colorName} с яркостью {brightness}%...");
 
                 foreach (IAuraRgbLight light in keyboard.Lights)
                 {
-                    light.Color = color;
+                    light.Color = ApplyBrightness(color, brightness);
                 }
                 keyboard.Apply();
-                keyboard.Apply();
 
-                Console.WriteLine($"✅ Клавиатура окрашена в {colorName}");
+                Console.WriteLine($"✅ Клавиатура окрашена в {colorName} с яркостью {brightness}%");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"❌ Ошибка при установке цвета: {ex.Message}");
             }
+        }
+
+        static uint ApplyBrightness(uint color, int brightness)
+        {
+            byte r = (byte)((color >> 16) & 0xFF);
+            byte g = (byte)((color >> 8) & 0xFF);
+            byte b = (byte)(color & 0xFF);
+
+            r = (byte)(r * brightness / 100);
+            g = (byte)(g * brightness / 100);
+            b = (byte)(b * brightness / 100);
+
+            return (uint)((r << 16) | (g << 8) | b);
         }
     }
 }
