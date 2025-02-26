@@ -67,7 +67,7 @@ namespace KeyboardLightingServer
                     {
                         keyboard = dev;
                         Console.WriteLine("✅ Клавиатура найдена.");
-                        SetKeyboardColor("white", 100);
+                        SetKeyboardColor("white", 100, 100);
 
                         return true;
                     }
@@ -93,20 +93,27 @@ namespace KeyboardLightingServer
                     HttpListenerContext context = listener.GetContext();
                     HttpListenerRequest request = context.Request;
 
-                    if (request.HttpMethod == "GET" && request.QueryString["value"] != null && request.QueryString["sliderValue"] != null)
+                    if (request.HttpMethod == "GET" && request.QueryString["value"] != null && request.QueryString["sliderValue"] != null && request.QueryString["sliderValueWhite"] != null)
                     {
                         string color = request.QueryString["value"];
                         string sliderValueStr = request.QueryString["sliderValue"];
+                        string sliderValueWhiteStr = request.QueryString["sliderValueWhite"];
 
                         if (!double.TryParse(sliderValueStr, out double sliderValue))
                         {
                             sliderValue = 100; 
                         }
 
-                        int brightness = Clamp((int)sliderValue, 0, 100);
-                        SetKeyboardColor(color, brightness);
+                        if (!double.TryParse(sliderValueWhiteStr, out double sliderValueWhite))
+                        {
+                            sliderValueWhite = 100;
+                        }
 
-                        string responseString = $"Клавиатура окрашена в {color} с яркостью {brightness}%";
+                        int brightness = Clamp((int)sliderValue, 0, 100);
+                        int whiteBalance = Clamp((int)sliderValueWhite, 0, 100);
+                        SetKeyboardColor(color, brightness, whiteBalance);
+
+                        string responseString = $"Клавиатура окрашена в {color} с яркостью {brightness}% и балансом белого {whiteBalance}";
                         byte[] buffer = System.Text.Encoding.UTF8.GetBytes(responseString);
                         context.Response.ContentLength64 = buffer.Length;
                         context.Response.OutputStream.Write(buffer, 0, buffer.Length);
@@ -121,7 +128,7 @@ namespace KeyboardLightingServer
             return (value < min) ? min : (value > max) ? max : value;
         }
 
-        static void SetKeyboardColor(string colorName, int brightness)
+        static void SetKeyboardColor(string colorName, int brightness, int whiteBalance)
         {
             if (keyboard == null)
             {
@@ -137,20 +144,38 @@ namespace KeyboardLightingServer
 
             try
             {
-                Console.WriteLine($"🎨 Установка цвета: {colorName} с яркостью {brightness}%...");
+                color = ApplyWhiteBalance(color, whiteBalance);
+                color = ApplyBrightness(color, brightness);
 
                 foreach (IAuraRgbLight light in keyboard.Lights)
                 {
-                    light.Color = ApplyBrightness(color, brightness);
+                    light.Color = color;
                 }
                 keyboard.Apply();
 
-                Console.WriteLine($"✅ Клавиатура окрашена в {colorName} с яркостью {brightness}%");
+                Console.WriteLine($"✅ Клавиатура окрашена в {colorName} с яркостью {brightness}% и балансом белого {whiteBalance}%");
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"❌ Ошибка при установке цвета: {ex.Message}");
             }
+        }
+
+        static uint ApplyWhiteBalance(uint color, int whiteBalance)
+        {
+            byte r = (byte)((color >> 16) & 0xFF);
+            byte g = (byte)((color >> 8) & 0xFF);
+            byte b = (byte)(color & 0xFF);
+
+            byte whiteR = (byte)(255 * whiteBalance / 100);
+            byte whiteG = (byte)(255 * whiteBalance / 100);
+            byte whiteB = (byte)(255 * whiteBalance / 100);
+
+            r = (byte)Math.Min(255, r + whiteR);
+            g = (byte)Math.Min(255, g + whiteG);
+            b = (byte)Math.Min(255, b + whiteB);
+
+            return (uint)((r << 16) | (g << 8) | b);
         }
 
         static uint ApplyBrightness(uint color, int brightness)
